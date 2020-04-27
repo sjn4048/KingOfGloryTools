@@ -1,3 +1,7 @@
+This repository has been permanently moved to [here](<https://github.com/sjn4048/NgaCodeConverter>)
+
+
+
 ### 简介
 
 - 本工具支持将HTML或Markdown转换为NGA代码（一种BBCode方言）

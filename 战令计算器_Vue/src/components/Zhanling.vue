@@ -111,14 +111,14 @@
             </a-button>
           </a-form-item>
         </a-form>
-        <p id="result" v-if="resultStr">{{resultStr}}</p>
+        <span id="result" v-if="resultStr" style="white-space: pre-line;">{{resultStr}}</span>
       </a-col>
       <a-col :span="formMargin"></a-col>
-      <a-divider></a-divider>
+      <a-divider></a-divider>I
       <a-col :xs="1" :sm="2" :md="3" :lg="4" :xl="5"></a-col>
       <a-col :xs="22" :sm="20" :md="18" :lg="16" :xl="14">
-        <a-alert message="未计算开箱抽到的100/200战令经验" banner></a-alert>
         <a-alert message="默认已经打开本周的经验宝箱" banner></a-alert>
+        <a-alert message="未计算开箱抽到的100/200战令经验" banner></a-alert>
         <a-alert message="本工具默认可以完成所有赛季任务，但[累计登陆]任务可能会由于已登录天数过少而无法完成" banner></a-alert>
         <a-divider></a-divider>
         <b>如果这个程序有帮助到你，请将网址分享给你的朋友，或前往<a href="https://ngabbs.com/read.php?tid=16549128&_ff=516">NGA论坛</a>回复顶帖，让更多人看到这个工具。</b>
@@ -130,7 +130,7 @@
 
 <script>
   import global from '@/components/GlobalStyle'
-  import {index, date, exp, seasonTask, level, skin} from '@/components/S16Data'
+  import {index, date, exp, seasonTask, level, awards} from '@/components/S19Data'
   import zhCN from 'ant-design-vue/lib/locale-provider/zh_CN'
   import {Button, LocaleProvider, Row, Col, Form, Input, Checkbox, Divider, Alert} from 'ant-design-vue'
 
@@ -151,6 +151,7 @@
     data () {
       return {
         zhCN,
+        startTime: date.START_DATE,
         deadline: date.END_DATE,
         formMargin: global.formMargin,
         formItemLayout: global.formItemLayout,
@@ -166,7 +167,8 @@
       this.form = this.$form.createForm(this)
     },
     mounted () {
-      this.leftWeekCnt = parseInt((this.deadline.getTime() - this.currentTime.getTime()) / (24 * 3600 * 1000 * 7)) + 1
+      this.leftWeekCnt = Math.ceil((this.deadline.getTime() - this.currentTime.getTime()) / (24 * 3600 * 1000 * 7))
+      this.totalWeekCnt = Math.ceil((this.deadline.getTime() - this.startTime.getTime()) / (24 * 3600 * 1000 * 7))
     },
     methods: {
       toDateString: function (d) {
@@ -178,6 +180,8 @@
       calc (e) {
         e.preventDefault()
         this.form.validateFields((err, values) => {
+          let earliestDate
+          let targetExp
           if (!err) {
             console.log(values)
             // 表单输入数据
@@ -196,6 +200,7 @@
 
             // 赛季任务完成数量
             var seasonTaskFinCnt = parseInt(values.seasonTaskFinCnt, 10)
+            var MAX_EXP_LAST_WEEK = (this.totalWeekCnt - 1) * exp.WEEK_INCR + exp.MAX_EXP_FIRST_WEEK
             if (seasonTaskFinCnt > seasonTask.SEASON_TASK_TOTAL || seasonTaskFinCnt < 0 || isNaN(seasonTaskFinCnt)) {
               alert('赛季任务完成数量填写错误！（范围：0-5）')
               return
@@ -203,9 +208,9 @@
 
             // 是否氪金
             var isVip = values.isVipUser
+            var weeklyGiftExp = (isVip ? exp.VIP_WEEK_AWARD : 0) + exp.NORMAL_WEEK_AWARD
 
-            let MAX_EXP_CUR_WEEK = exp.MAX_EXP_LAST_WEEK - (this.leftWeekCnt - 1) * exp.WEEK_INCR
-            console.log(MAX_EXP_CUR_WEEK)
+            let MAX_EXP_CUR_WEEK = MAX_EXP_LAST_WEEK - (this.leftWeekCnt - 1) * exp.WEEK_INCR
             // 本周战令经验
             var curWeekExp = this.curWeekFull ? MAX_EXP_CUR_WEEK : parseInt(values.curWeekExp, 10)
             if (curWeekExp > MAX_EXP_CUR_WEEK || curWeekExp < 0 || isNaN(curWeekExp)) {
@@ -214,38 +219,44 @@
             }
 
             // 进行计算
-            var totalCurExp = curLv * exp.MAX_EXP_PER_LV + curLvExp // 当前总经验
-            if (curWeekExp + seasonTaskFinCnt * seasonTask.SEASON_TASK_AWARD > totalCurExp) {
+            var totalCurExp = (curLv - 1) * exp.MAX_EXP_PER_LV + curLvExp // 当前总经验
+            if (curWeekExp + seasonTaskFinCnt * seasonTask.SEASON_TASK_AWARD + weeklyGiftExp > totalCurExp) {
               alert('数据填写错误！本周经验+赛季任务经验不应大于已获得的总经验')
               return
             }
+
+            if (this.leftWeekCnt <= 0) {
+              alert('本赛季战令已经结束！')
+              return
+            }
             // 剩余可以获得的普通经验
-            var leftOrdinaryExp = (exp.MAX_EXP_LAST_WEEK + MAX_EXP_CUR_WEEK) / 2 * this.leftWeekCnt - curWeekExp
+
+            var leftOrdinaryExp = (MAX_EXP_LAST_WEEK + MAX_EXP_CUR_WEEK) / 2 * this.leftWeekCnt - curWeekExp
 
             // 剩余可以获得的赠送经验（进阶版），默认本周已经领取，因此不再计算本周
-            var leftVipExp = ((isVip ? exp.VIP_WEEK_AWARD : 0) + exp.NORMAL_WEEK_AWARD) * (this.leftWeekCnt - 1)
+            var leftWeeklyGiftExp = weeklyGiftExp * (this.leftWeekCnt - 1)
 
             // 剩余的赛季任务经验
             var leftSeasonTaskExp = (seasonTask.SEASON_TASK_TOTAL - seasonTaskFinCnt) * seasonTask.SEASON_TASK_AWARD
 
             // 总的剩余经验
-            var totalLeftExp = leftOrdinaryExp + leftVipExp + leftSeasonTaskExp
+            var totalLeftExp = leftOrdinaryExp + leftWeeklyGiftExp + leftSeasonTaskExp
 
             // 加上已有经验之后获得总经验上限
             var afterwardsExp = totalLeftExp + totalCurExp
-            var afterwardsLv = Math.floor(afterwardsExp / exp.MAX_EXP_PER_LV)
+            var afterwardsLv = Math.floor(afterwardsExp / exp.MAX_EXP_PER_LV) + 1
             var afterwardsLvExp = afterwardsExp % exp.MAX_EXP_PER_LV
             var resultStr = '如果刷满未来的全部战令任务+赛季任务，本赛季战令系统截止时，你将到达' + afterwardsLv + '级+' + afterwardsLvExp + '经验。\n'
             if (!isVip) {
               resultStr += '如果现在买 388战令，可以到达' + (this.leftWeekCnt + afterwardsLv) + '级。\n如果现在买1288战令，可以到达' + (level.BONUS_LEVEL_1288 + this.leftWeekCnt + afterwardsLv) + '级。\n'
             }
 
-            if (curLv < skin.SECOND_SKIN_LEVEL) { // 还没拿到战令皮，计算还要多久
-              var targetExp = skin.SECOND_SKIN_LEVEL * exp.MAX_EXP_PER_LV
+            if (curLv < awards.SECOND_AWARD_LEVEL) { // 还没拿到战令皮，计算还要多久
+              targetExp = awards.SECOND_AWARD_LEVEL * exp.MAX_EXP_PER_LV
               if (isVip) { // 是进阶版的情况
                 let leftExp = targetExp - totalCurExp - leftSeasonTaskExp - (MAX_EXP_CUR_WEEK - curWeekExp)
                 if (leftExp < 0) {
-                  resultStr += '再加把劲，这星期你就可以拿到战令皮了！\n'
+                  resultStr += `再加把劲，这星期你就可以拿到${awards.SECOND_AWARD_NAME}了！\n`
                 } else {
                   // 解一元二次方程ax^2+bx+c=0
                   let a = exp.WEEK_INCR / 2
@@ -254,13 +265,38 @@
                   let delta = b * b - 4 * a * c
                   let res = Math.ceil(-b / (2 * a) + Math.sqrt(delta) / (2 * a))
                   if (res < this.leftWeekCnt) { // 不氪金就拿得到
-                    var earliestDate = new Date(this.currentTime)
+                    earliestDate = new Date(this.currentTime)
                     earliestDate.setDate(earliestDate.getDate() + (7 - earliestDate.getDay()) % 7 + (res - 1) * 7 + 1)
-                    resultStr += '你距离80级战令皮肤还剩' + res + '周的时间~(' + this.toDateString(earliestDate) + ')\n'
+                    resultStr += `你距离${awards.SECOND_AWARD_NAME}还剩${res}周的时间~(${this.toDateString(earliestDate)})\n`
                   } else {
                     let mustBuyExp = targetExp - afterwardsExp
                     let dq = Math.ceil(mustBuyExp / exp.MAX_EXP_PER_LV) * level.MONEY_PER_LEVEL
-                    resultStr += '按照现在的进度，你必须要刷满所有经验且氪金' + dq + '点券才有可能在截止前拿到战令皮肤。\n'
+                    resultStr += `按照现在的进度，你必须要刷满所有经验且氪金${dq}点券才有可能在截止前拿到${awards.SECOND_AWARD_NAME}。\n`
+                  }
+                }
+              }
+            }
+            if (curLv < awards.THIRD_AWARD_LEVEL) { // 还没拿到战令皮，计算还要多久
+              targetExp = awards.THIRD_AWARD_LEVEL * exp.MAX_EXP_PER_LV
+              if (isVip) { // 是进阶版的情况
+                let leftExp = targetExp - totalCurExp - leftSeasonTaskExp - (MAX_EXP_CUR_WEEK - curWeekExp)
+                if (leftExp < 0) {
+                  resultStr += `再加把劲，这星期你就可以拿到${awards.THIRD_AWARD_NAME}了！\n`
+                } else {
+                  // 解一元二次方程ax^2+bx+c=0
+                  let a = exp.WEEK_INCR / 2
+                  let b = exp.WEEK_INCR / 2 + MAX_EXP_CUR_WEEK + exp.VIP_WEEK_AWARD
+                  let c = -leftExp
+                  let delta = b * b - 4 * a * c
+                  let res = Math.ceil(-b / (2 * a) + Math.sqrt(delta) / (2 * a))
+                  if (res < this.leftWeekCnt) { // 不氪金就拿得到
+                    let earliestDate = new Date(this.currentTime)
+                    earliestDate.setDate(earliestDate.getDate() + (7 - earliestDate.getDay()) % 7 + (res - 1) * 7 + 1)
+                    resultStr += `你距离${awards.THIRD_AWARD_NAME}还剩${res}周的时间~(${this.toDateString(earliestDate)})\n`
+                  } else {
+                    let mustBuyExp = targetExp - afterwardsExp
+                    let dq = Math.ceil(mustBuyExp / exp.MAX_EXP_PER_LV) * level.MONEY_PER_LEVEL
+                    resultStr += `按照现在的进度，你必须要刷满所有经验且氪金${dq}点券才有可能在截止前拿到${awards.THIRD_AWARD_NAME}。\n`
                   }
                 }
               }
