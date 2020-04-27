@@ -8,3 +8,7 @@
 - toy：一些不成熟的小玩具
 - 战令计算器：见[此处](<https://ngabbs.com/read.php?tid=16549128>)
 
+### License
+These research data are published under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0) which allows very broad use for both academic and commercial purposes. You are very welcome to modify these research and use them in your own projects. 
+
+Please keep a link to the [original repository.](https://github.com/sjn4048/KingOfGloryTools)
